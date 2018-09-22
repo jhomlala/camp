@@ -42,4 +42,9 @@ public class ApplicationCreateRequest {
 		this.packageName = packageName;
 	}
 
+	@Override
+	public String toString() {
+		return "ApplicationCreateRequest [name=" + name + ", os=" + os + ", packageName=" + packageName + "]";
+	}
+
 }

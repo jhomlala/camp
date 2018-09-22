@@ -1,5 +1,9 @@
 package com.camp.applicationservice.controller;
 
+import static org.mockito.MockitoAnnotations.initMocks;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -10,20 +14,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import com.camp.applicationservice.controller.ApplicationController;
-import com.camp.applicationservice.domain.Application;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import com.camp.applicationservice.domain.ApplicationCreateRequest;
+import com.camp.applicationservice.domain.ApplicationUpdateRequest;
 import com.camp.applicationservice.service.ApplicationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import static org.mockito.Mockito.when;
-import static org.mockito.MockitoAnnotations.initMocks;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.util.UUID;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -51,6 +47,7 @@ public class ApplicationControllerTest {
 		ApplicationCreateRequest applicationCreateRequest = new ApplicationCreateRequest();
 		applicationCreateRequest.setName("TestApp");
 		applicationCreateRequest.setOs("Android");
+		applicationCreateRequest.setPackageName("com.testapp");
 		String json = mapper.writeValueAsString(applicationCreateRequest);
 
 		mockMvc.perform(post("/applications/").contentType(MediaType.APPLICATION_JSON).content(json))
@@ -100,6 +97,7 @@ public class ApplicationControllerTest {
 		ApplicationCreateRequest applicationCreateRequest = new ApplicationCreateRequest();
 		applicationCreateRequest.setName("");
 		applicationCreateRequest.setOs("BlackBerry");
+		applicationCreateRequest.setPackageName("com.testapp");
 		String json = mapper.writeValueAsString(applicationCreateRequest);
 
 		mockMvc.perform(post("/applications/").contentType(MediaType.APPLICATION_JSON).content(json))
@@ -113,6 +111,7 @@ public class ApplicationControllerTest {
 		ApplicationCreateRequest applicationCreateRequest = new ApplicationCreateRequest();
 		applicationCreateRequest.setName(null);
 		applicationCreateRequest.setOs("BlackBerry");
+		applicationCreateRequest.setPackageName("com.testapp");
 		String json = mapper.writeValueAsString(applicationCreateRequest);
 
 		mockMvc.perform(post("/applications/").contentType(MediaType.APPLICATION_JSON).content(json))
@@ -125,10 +124,32 @@ public class ApplicationControllerTest {
 		ApplicationCreateRequest applicationCreateRequest = new ApplicationCreateRequest();
 		applicationCreateRequest.setName("123456789012345678901234567890");
 		applicationCreateRequest.setOs("BlackBerry");
+		applicationCreateRequest.setPackageName("com.testapp");
 		String json = mapper.writeValueAsString(applicationCreateRequest);
 
 		mockMvc.perform(post("/applications/").contentType(MediaType.APPLICATION_JSON).content(json))
 				.andExpect(status().isBadRequest());
+	}
+	
+	@Test
+	public void shouldFailedOnValidationTryingToFindApplicationWithInvalidApplicationId() throws Exception {
+		mockMvc.perform(get("/applications/1")).andExpect(status().isNotFound());
+	}
+	
+	@Test
+	public void shouldFailedOnValidationTryingToUpdateApplicationWithInvalidApplicationId() throws Exception {
+		ApplicationUpdateRequest applicationUpdateRequest = new ApplicationUpdateRequest();
+		applicationUpdateRequest.setFirebaseKey("0");
+		applicationUpdateRequest.setName("");
+		String json = mapper.writeValueAsString(applicationUpdateRequest);
+
+		mockMvc.perform(put("/applications/1").contentType(MediaType.APPLICATION_JSON).content(json))
+				.andExpect(status().isNotFound());
+	}
+	
+	@Test
+	public void shouldFindAllApplications() throws Exception {
+		mockMvc.perform(get("/applications/")).andExpect(status().isOk());
 	}
 	
 }

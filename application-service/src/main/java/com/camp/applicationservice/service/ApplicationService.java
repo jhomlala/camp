@@ -1,5 +1,7 @@
 package com.camp.applicationservice.service;
 
+import java.util.Date;
+import java.util.Optional;
 import java.util.UUID;
 
 import javax.validation.Valid;
@@ -11,7 +13,10 @@ import org.springframework.stereotype.Service;
 
 import com.camp.applicationservice.domain.Application;
 import com.camp.applicationservice.domain.ApplicationCreateRequest;
+import com.camp.applicationservice.domain.ApplicationUpdateRequest;
 import com.camp.applicationservice.exception.ApplicationExistsException;
+import com.camp.applicationservice.exception.ApplicationNotExistsException;
+import com.camp.applicationservice.exception.InvalidApplicationIdException;
 import com.camp.applicationservice.repository.ApplicationRepository;
 
 @Service
@@ -22,17 +27,19 @@ public class ApplicationService {
 	@Autowired
 	private ApplicationRepository applicationRepository;
 
-	public Application createApplication(@Valid ApplicationCreateRequest applicationCreateRequest) throws ApplicationExistsException {
+	public Application createApplication(@Valid ApplicationCreateRequest applicationCreateRequest) {
+		logger.info("Creating application from request: {}", applicationCreateRequest);
 		if (findByPackageName(applicationCreateRequest.getPackageName()) != null) {
-			throw new ApplicationExistsException("packageName",applicationCreateRequest.getPackageName());
+			throw new ApplicationExistsException();
 		}
-		
-		
+
 		Application application = new Application();
-		application.setId(UUID.randomUUID());
+		application.setId(generateValidUUID());
 		application.setName(applicationCreateRequest.getName());
 		application.setOs(applicationCreateRequest.getOs());
 		application.setPackageName(applicationCreateRequest.getPackageName());
+		application.setCreatedAt(new Date());
+		application.setUpdatedAt(new Date());
 		application = applicationRepository.save(application);
 		logger.info("Created application: {}", application);
 		return application;
@@ -41,8 +48,49 @@ public class ApplicationService {
 	public Iterable<Application> findAll() {
 		return applicationRepository.findAll();
 	}
-	
+
 	public Application findByPackageName(String packageName) {
 		return applicationRepository.findByPackageName(packageName);
 	}
+
+	public Application findById(String id) {
+		logger.info("Find application by id: {}",id);
+		if (!isIdValid(id)) {
+			throw new InvalidApplicationIdException();
+		}
+		Optional<Application> applicationOptional = findByIdWithOptional(id);
+		return applicationOptional.orElseThrow(ApplicationNotExistsException::new);
+	}
+	
+	public Optional<Application> findByIdWithOptional(String id) {
+		return applicationRepository.findById(id);
+	}
+	
+
+	public Application updateApplication(String id, ApplicationUpdateRequest applicationUpdateRequest) {
+		logger.info("Update application for id: {}, applicationUpdateRequest: {}", id, applicationUpdateRequest);
+		if (!isIdValid(id)) {
+			throw new InvalidApplicationIdException();
+		}
+
+		Application application = findById(id);
+		application.setFirebaseApiKey(applicationUpdateRequest.getFirebaseKey());
+		application.setName(applicationUpdateRequest.getName());
+		application.setUpdatedAt(new Date());
+		return applicationRepository.save(application);
+	}
+
+	private String generateValidUUID() {
+		while (true) {
+			String id = UUID.randomUUID().toString();
+			if (!findByIdWithOptional(id).isPresent()) {
+				return id;
+			}
+		}
+	}
+
+	private boolean isIdValid(String id) {
+		return id != null && id.length() > 0;
+	}
+
 }

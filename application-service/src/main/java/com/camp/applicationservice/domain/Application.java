@@ -10,8 +10,8 @@ import org.springframework.data.cassandra.core.mapping.Table;
 public class Application {
 
 	@PrimaryKey
-	private UUID id;
-	private UUID owner;
+	private String id;
+	private String owner;
 	private String name;
 	private String os;
 	private String packageName;
@@ -19,19 +19,21 @@ public class Application {
 	private Date createdAt;
 	private Date updatedAt;
 
-	public UUID getId() {
+	
+
+	public String getId() {
 		return id;
 	}
 
-	public void setId(UUID id) {
+	public void setId(String id) {
 		this.id = id;
 	}
 
-	public UUID getOwner() {
+	public String getOwner() {
 		return owner;
 	}
 
-	public void setOwner(UUID owner) {
+	public void setOwner(String owner) {
 		this.owner = owner;
 	}
 
