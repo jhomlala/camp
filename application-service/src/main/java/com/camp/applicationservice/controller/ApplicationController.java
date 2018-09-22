@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.camp.applicationservice.domain.Application;
 import com.camp.applicationservice.domain.ApplicationCreateRequest;
+import com.camp.applicationservice.exception.ApplicationExistsException;
 import com.camp.applicationservice.service.ApplicationService;
 
 @RestController
@@ -20,7 +21,7 @@ public class ApplicationController {
 	private ApplicationService applicationService;
 
 	@RequestMapping(path = "/", method = RequestMethod.POST)
-	public Application createApplication(@Valid @RequestBody ApplicationCreateRequest applicationCreateRequest) {
+	public Application createApplication(@Valid @RequestBody ApplicationCreateRequest applicationCreateRequest) throws ApplicationExistsException {
 		return applicationService.createApplication(applicationCreateRequest);
 	}
 

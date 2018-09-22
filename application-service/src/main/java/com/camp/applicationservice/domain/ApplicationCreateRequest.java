@@ -14,6 +14,10 @@ public class ApplicationCreateRequest {
 	@EnumValidator(enumClass = Os.class, ignoreCase = true)
 	private String os;
 
+	@NotNull
+	@Length(min = 3, max = 40)
+	private String packageName;
+
 	public String getName() {
 		return name;
 	}
@@ -28,6 +32,14 @@ public class ApplicationCreateRequest {
 
 	public void setOs(String os) {
 		this.os = os;
+	}
+
+	public String getPackageName() {
+		return packageName;
+	}
+
+	public void setPackageName(String packageName) {
+		this.packageName = packageName;
 	}
 
 }
