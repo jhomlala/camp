@@ -2,7 +2,6 @@ package com.camp.applicationservice.controller;
 
 import javax.validation.Valid;
 
-import org.hibernate.validator.constraints.Length;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,7 +15,6 @@ import com.camp.applicationservice.domain.ApplicationUpdateRequest;
 import com.camp.applicationservice.service.ApplicationService;
 
 @RestController
-@RequestMapping("/applications")
 public class ApplicationController {
 
 	@Autowired
