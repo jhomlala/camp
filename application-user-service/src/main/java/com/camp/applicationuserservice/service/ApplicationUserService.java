@@ -4,6 +4,8 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 
+import javax.validation.Valid;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,8 +15,11 @@ import com.camp.applicationuserservice.client.ApplicationClient;
 import com.camp.applicationuserservice.domain.Application;
 import com.camp.applicationuserservice.domain.ApplicationUser;
 import com.camp.applicationuserservice.domain.ApplicationUserCreateRequest;
+import com.camp.applicationuserservice.domain.ApplicationUserUpdateRequest;
 import com.camp.applicationuserservice.exception.ApplicationUserExistsException;
+import com.camp.applicationuserservice.exception.ApplicationUserNotExistsException;
 import com.camp.applicationuserservice.exception.InvalidApplicationIdException;
+import com.camp.applicationuserservice.exception.InvalidApplicationUserIdException;
 import com.camp.applicationuserservice.repository.ApplicationUserRepository;
 
 @Service
@@ -54,8 +59,12 @@ public class ApplicationUserService {
 
 	}
 
-	public ApplicationUser findByApplicationIdAndUsername(String id, String username) {
-		return applicationUserRepository.findByApplicationIdAndUsername(id, username);
+	public ApplicationUser findByApplicationIdAndUsername(String applicationId, String username) {
+		return applicationUserRepository.findByApplicationIdAndUsername(applicationId, username);
+	}
+
+	public ApplicationUser findByIdAndApplicationId(String userId, String applicationId) {
+		return applicationUserRepository.findByIdAndApplicationId(userId, applicationId);
 	}
 
 	private String generateValidUUID(String applicationId) {
@@ -73,6 +82,27 @@ public class ApplicationUserService {
 
 	private boolean isIdValid(String id) {
 		return id != null && id.length() > 0;
+	}
+
+	public ApplicationUser updateApplicationUser(String userId,
+			@Valid ApplicationUserUpdateRequest applicationUserUpdateRequest) {
+		logger.info("Updating application user for applicationUserUpdateRequest: {}", applicationUserUpdateRequest);
+
+		if (!isIdValid(userId)) {
+			throw new InvalidApplicationUserIdException();
+		}
+		ApplicationUser applicationUser = findByIdAndApplicationId(userId,
+				applicationUserUpdateRequest.getApplicationId());
+		logger.info("Application user: userId: {}, applicationId: {}", userId,
+				applicationUserUpdateRequest.getApplicationId());
+		if (applicationUser == null) {
+			logger.info("Application user not found");
+			throw new ApplicationUserNotExistsException();
+		}
+		applicationUser.setFirebaseToken(applicationUserUpdateRequest.getFirebaseToken());
+		applicationUserRepository.save(applicationUser);
+
+		return applicationUser;
 	}
 
 }
