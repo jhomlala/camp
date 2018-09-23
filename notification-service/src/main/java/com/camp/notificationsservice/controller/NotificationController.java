@@ -23,4 +23,9 @@ public class NotificationController {
 	public Notification createNotification(@Valid @RequestBody NotificationCreateRequest notificationCreateRequest) {
 		return notificationService.createNotification(notificationCreateRequest);
 	}
+	
+	@RequestMapping(path = "/pending/", method = RequestMethod.POST)
+	public Notification selectFirstPendingNotification() {
+		return notificationService.findFirstPendingNotification();
+	}
 }

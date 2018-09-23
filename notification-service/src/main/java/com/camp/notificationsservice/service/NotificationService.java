@@ -59,5 +59,10 @@ public class NotificationService {
 		return id != null && id.length() > 0;
 	}
 
+	
+
+	public Notification findFirstPendingNotification() {
+		return notificationRepository.findFirstByStatusOrderByCreatedAdDesc();
+	}
 
 }
