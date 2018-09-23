@@ -10,10 +10,6 @@ public class ApplicationUpdateRequest {
 	@Length(min = 3, max = 40)
 	private String name;
 
-	@NotNull
-	@Length(min = 3, max = 40)
-	private String firebaseKey;
-
 	public String getName() {
 		return name;
 	}
@@ -22,17 +18,9 @@ public class ApplicationUpdateRequest {
 		this.name = name;
 	}
 
-	public String getFirebaseKey() {
-		return firebaseKey;
-	}
-
-	public void setFirebaseKey(String firebaseKey) {
-		this.firebaseKey = firebaseKey;
-	}
-
 	@Override
 	public String toString() {
-		return "ApplicationUpdateRequest [name=" + name + ", firebaseKey=" + firebaseKey + "]";
+		return "ApplicationUpdateRequest [name=" + name + "]";
 	}
 
 }

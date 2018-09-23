@@ -1,7 +1,6 @@
 package com.camp.applicationservice.domain;
 
 import java.util.Date;
-import java.util.UUID;
 
 import org.springframework.data.cassandra.core.mapping.PrimaryKey;
 import org.springframework.data.cassandra.core.mapping.Table;
@@ -15,11 +14,9 @@ public class Application {
 	private String name;
 	private String os;
 	private String packageName;
-	private String firebaseApiKey;
+	private String googleServicesConfiguration;
 	private Date createdAt;
 	private Date updatedAt;
-
-	
 
 	public String getId() {
 		return id;
@@ -61,12 +58,14 @@ public class Application {
 		this.packageName = packageName;
 	}
 
-	public String getFirebaseApiKey() {
-		return firebaseApiKey;
+	
+
+	public String getGoogleServicesConfiguration() {
+		return googleServicesConfiguration;
 	}
 
-	public void setFirebaseApiKey(String firebaseApiKey) {
-		this.firebaseApiKey = firebaseApiKey;
+	public void setGoogleServicesConfiguration(String googleServicesConfiguration) {
+		this.googleServicesConfiguration = googleServicesConfiguration;
 	}
 
 	public Date getCreatedAt() {

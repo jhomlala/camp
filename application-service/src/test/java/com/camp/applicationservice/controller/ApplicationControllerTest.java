@@ -137,9 +137,8 @@ public class ApplicationControllerTest {
 	}
 	
 	@Test
-	public void shouldFailedOnValidationTryingToUpdateApplicationWithInvalidApplicationId() throws Exception {
+	public void shouldFailedOnValidationTryingToUpdateApplicationWithInvaliName() throws Exception {
 		ApplicationUpdateRequest applicationUpdateRequest = new ApplicationUpdateRequest();
-		applicationUpdateRequest.setFirebaseKey("0");
 		applicationUpdateRequest.setName("");
 		String json = mapper.writeValueAsString(applicationUpdateRequest);
 
