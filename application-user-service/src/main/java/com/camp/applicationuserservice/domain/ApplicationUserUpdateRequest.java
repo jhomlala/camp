@@ -8,18 +8,7 @@ public class ApplicationUserUpdateRequest {
 
 	@NotNull
 	@Length(min = 3, max = 40)
-	private String applicationId;
-	@NotNull
-	@Length(min = 3, max = 40)
 	private String firebaseToken;
-
-	public String getApplicationId() {
-		return applicationId;
-	}
-
-	public void setApplicationId(String applicationId) {
-		this.applicationId = applicationId;
-	}
 
 	public String getFirebaseToken() {
 		return firebaseToken;
@@ -27,6 +16,11 @@ public class ApplicationUserUpdateRequest {
 
 	public void setFirebaseToken(String firebaseToken) {
 		this.firebaseToken = firebaseToken;
+	}
+
+	@Override
+	public String toString() {
+		return "ApplicationUserUpdateRequest [firebaseToken=" + firebaseToken + "]";
 	}
 
 }

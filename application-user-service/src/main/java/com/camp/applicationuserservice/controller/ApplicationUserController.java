@@ -20,16 +20,23 @@ public class ApplicationUserController {
 	@Autowired
 	private ApplicationUserService applicationUserService;
 
-	@RequestMapping(path = "/", method = RequestMethod.POST)
-	public ApplicationUser createApplicationUser(
+	@RequestMapping(path = "/{applicationId}", method = RequestMethod.POST)
+	public ApplicationUser createApplicationUser(@PathVariable("applicationId") String applicationId,
 			@Valid @RequestBody ApplicationUserCreateRequest applicationUserCreateRequest) {
-		return applicationUserService.createApplicationUser(applicationUserCreateRequest);
+		return applicationUserService.createApplicationUser(applicationId, applicationUserCreateRequest);
 	}
-	
-	@RequestMapping(path = "/{id}", method = RequestMethod.PUT)
-	public ApplicationUser updateApplicationUser( @PathVariable("id") String userId,
+
+	@RequestMapping(path = "/{applicationId}/{userId}", method = RequestMethod.PUT)
+	public ApplicationUser updateApplicationUser(@PathVariable("applicationId") String applicationId,
+			@PathVariable("userId") String userId,
 			@Valid @RequestBody ApplicationUserUpdateRequest applicationUserUpdateRequest) {
-		return applicationUserService.updateApplicationUser(userId,applicationUserUpdateRequest);
+		return applicationUserService.updateApplicationUser(userId,applicationId, applicationUserUpdateRequest);
 	}
-	
+
+	@RequestMapping(path = "/{applicationId}/{userId}", method = RequestMethod.GET)
+	public ApplicationUser selectApplicationUser(@PathVariable("applicationId") String applicationId,
+			@PathVariable("userId") String userId) {
+		return applicationUserService.findByIdAndApplicationId(userId, applicationId);
+	}
+
 }

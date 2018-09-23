@@ -33,21 +33,21 @@ public class ApplicationUserService {
 	@Autowired
 	private ApplicationClient applicationClient;
 
-	public ApplicationUser createApplicationUser(ApplicationUserCreateRequest applicationUserCreateRequest) {
+	public ApplicationUser createApplicationUser(String applicationId,
+			ApplicationUserCreateRequest applicationUserCreateRequest) {
 		logger.info("Creating application from request: {}", applicationUserCreateRequest);
-		if (findByApplicationIdAndUsername(applicationUserCreateRequest.getApplicationId(),
-				applicationUserCreateRequest.getUsername()) != null) {
+		if (findByApplicationIdAndUsername(applicationId, applicationUserCreateRequest.getUsername()) != null) {
 			throw new ApplicationUserExistsException();
 		}
-		Application application = applicationClient.getApplication(applicationUserCreateRequest.getApplicationId());
+		Application application = applicationClient.getApplication(applicationId);
 		if (application == null || application.getId() == null) {
 			throw new InvalidApplicationIdException();
 		}
 		logger.info("Selected application: {}", application);
 
 		ApplicationUser applicationUser = new ApplicationUser();
-		applicationUser.setId(generateValidUUID(applicationUserCreateRequest.getApplicationId()));
-		applicationUser.setApplicationId(applicationUserCreateRequest.getApplicationId());
+		applicationUser.setId(generateValidUUID(applicationId));
+		applicationUser.setApplicationId(applicationId);
 		applicationUser.setUsername(applicationUserCreateRequest.getUsername());
 		applicationUser.setCreatedAt(new Date());
 		applicationUser.setUpdatedAt(new Date());
@@ -84,17 +84,15 @@ public class ApplicationUserService {
 		return id != null && id.length() > 0;
 	}
 
-	public ApplicationUser updateApplicationUser(String userId,
+	public ApplicationUser updateApplicationUser(String userId, String applicationId,
 			@Valid ApplicationUserUpdateRequest applicationUserUpdateRequest) {
 		logger.info("Updating application user for applicationUserUpdateRequest: {}", applicationUserUpdateRequest);
 
 		if (!isIdValid(userId)) {
 			throw new InvalidApplicationUserIdException();
 		}
-		ApplicationUser applicationUser = findByIdAndApplicationId(userId,
-				applicationUserUpdateRequest.getApplicationId());
-		logger.info("Application user: userId: {}, applicationId: {}", userId,
-				applicationUserUpdateRequest.getApplicationId());
+		ApplicationUser applicationUser = findByIdAndApplicationId(userId, applicationId);
+		logger.info("Application user: userId: {}, applicationId: {}", userId, applicationId);
 		if (applicationUser == null) {
 			logger.info("Application user not found");
 			throw new ApplicationUserNotExistsException();

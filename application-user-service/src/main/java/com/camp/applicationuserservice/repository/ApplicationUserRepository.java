@@ -10,4 +10,5 @@ public interface ApplicationUserRepository extends CrudRepository<ApplicationUse
 	ApplicationUser findByApplicationIdAndUsername(String id, String username);
 
 	ApplicationUser findByIdAndApplicationId(String id, String applicationId);
+
 }
