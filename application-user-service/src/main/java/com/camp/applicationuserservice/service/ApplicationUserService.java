@@ -9,11 +9,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.camp.applicationuserservice.client.ApplicationClient;
+import com.camp.applicationuserservice.domain.Application;
 import com.camp.applicationuserservice.domain.ApplicationUser;
 import com.camp.applicationuserservice.domain.ApplicationUserCreateRequest;
 import com.camp.applicationuserservice.exception.ApplicationUserExistsException;
-import com.camp.applicationuserservice.exception.ApplicationUserNotExistsException;
-import com.camp.applicationuserservice.exception.InvalidApplicationUserIdException;
+import com.camp.applicationuserservice.exception.InvalidApplicationIdException;
 import com.camp.applicationuserservice.repository.ApplicationUserRepository;
 
 @Service
@@ -24,41 +25,43 @@ public class ApplicationUserService {
 	@Autowired
 	private ApplicationUserRepository applicationUserRepository;
 
+	@Autowired
+	private ApplicationClient applicationClient;
+
 	public ApplicationUser createApplicationUser(ApplicationUserCreateRequest applicationUserCreateRequest) {
 		logger.info("Creating application from request: {}", applicationUserCreateRequest);
 		if (findByApplicationIdAndUsername(applicationUserCreateRequest.getApplicationId(),
 				applicationUserCreateRequest.getUsername()) != null) {
 			throw new ApplicationUserExistsException();
 		}
+		Application application = applicationClient.getApplication(applicationUserCreateRequest.getApplicationId());
+		if (application == null || application.getId() == null) {
+			throw new InvalidApplicationIdException();
+		}
+		logger.info("Selected application: {}", application);
 
 		ApplicationUser applicationUser = new ApplicationUser();
+		applicationUser.setId(generateValidUUID(applicationUserCreateRequest.getApplicationId()));
 		applicationUser.setApplicationId(applicationUserCreateRequest.getApplicationId());
 		applicationUser.setUsername(applicationUserCreateRequest.getUsername());
 		applicationUser.setCreatedAt(new Date());
 		applicationUser.setUpdatedAt(new Date());
 		applicationUser.setFirebaseToken(applicationUserCreateRequest.getFirebaseToken());
 
+		applicationUserRepository.save(applicationUser);
+
 		return applicationUser;
 
-	}
-
-	public ApplicationUser findById(String id) {
-		logger.info("Find application by id: {}", id);
-		if (!isIdValid(id)) {
-			throw new InvalidApplicationUserIdException();
-		}
-		Optional<ApplicationUser> applicationOptional = findByIdWithOptional(id);
-		return applicationOptional.orElseThrow(ApplicationUserNotExistsException::new);
 	}
 
 	public ApplicationUser findByApplicationIdAndUsername(String id, String username) {
 		return applicationUserRepository.findByApplicationIdAndUsername(id, username);
 	}
 
-	private String generateValidUUID() {
+	private String generateValidUUID(String applicationId) {
 		while (true) {
 			String id = UUID.randomUUID().toString();
-			if (!findByIdWithOptional(id).isPresent()) {
+			if (findByApplicationIdAndUsername(applicationId, id) == null) {
 				return id;
 			}
 		}

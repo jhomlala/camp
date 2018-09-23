@@ -22,5 +22,10 @@ public class ApplicationUserCreateRequest {
 	public void setFirebaseToken(String firebaseToken) {
 		this.firebaseToken = firebaseToken;
 	}
+	@Override
+	public String toString() {
+		return "ApplicationUserCreateRequest [applicationId=" + applicationId + ", username=" + username
+				+ ", firebaseToken=" + firebaseToken + "]";
+	}
 	
 }
