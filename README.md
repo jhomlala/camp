@@ -12,3 +12,13 @@ Modules:
 * spark-service - handles machine learning operations
 * config - stores config for each services
 * registry - provides discovery server for services
+
+Technologies:
+* Spring Boot
+* Spring Cloud Config
+* Spring Eureka
+* Spring OpenFeign
+* Sprng Data Cassandra
+* Apache Spark
+* Cassandra
+
