@@ -9,5 +9,6 @@ Modules:
 * user-event-service - handles users events from mobile application
 * notification-service - handles creating and managing push notification operations
 * notification-sender-service - handles sending message to FCM server
+* spark-service - handles machine learning operations
 * config - stores config for each services
 * registry - provides discovery server for services
