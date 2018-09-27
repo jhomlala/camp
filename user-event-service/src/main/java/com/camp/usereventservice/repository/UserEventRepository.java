@@ -13,4 +13,7 @@ public interface UserEventRepository extends CrudRepository<UserEvent, String> {
 	
 	@Query("SELECT * FROM UserEvent  WHERE applicationId = ?0 AND createdAt > ?1 AND createdAt < ?2")
 	List<UserEvent> findByApplicationIdAndCreatedAtBetween(String applicationId,Date createdAtStart, Date createdAtEnd, Pageable pageable);
+	
+	@Query("SELECT COUNT(*) FROM UserEvent  WHERE applicationId = ?0 AND createdAt > ?1 AND createdAt < ?2")
+	long countByApplicationIdAndCreatedAtBetween(String applicationId,Date createdAtStart, Date createdAtEnd);
 }

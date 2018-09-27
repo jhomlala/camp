@@ -1,7 +1,11 @@
 package com.camp.sparkservice.service;
 
+import java.util.LinkedList;
+import java.util.Queue;
+
 import javax.annotation.PostConstruct;
 
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -9,10 +13,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.camp.sparkservice.config.ApplicationConfiguration;
-import com.camp.sparkservice.domain.SparkJob;
+import com.camp.sparkservice.domain.ChurnModelBuildProcess;
+import com.camp.sparkservice.domain.ChurnModelBuildRequest;
+import com.camp.sparkservice.domain.SparkProcess;
+import com.camp.sparkservice.domain.SparkProcessStatus;
 import com.camp.sparkservice.domain.WorkerThread;
 
 @Service
@@ -24,10 +32,14 @@ public class SparkService {
 	private ApplicationConfiguration config;
 	@Autowired
 	private ThreadPoolService threadPoolService;
+	@Autowired
+	private UserEventService userEventService;
 
 	private SparkSession sparkSession;
 	private SparkConf sparkConf;
 	private JavaSparkContext sparkContext;
+	private Queue<SparkProcess> sparkProcesses;
+	private SparkProcess currentProcess;
 
 	@PostConstruct
 	public void init() {
@@ -38,15 +50,7 @@ public class SparkService {
 		sparkSession = SparkSession.builder().sparkContext(sparkContext.sc()).appName("Java Spark SQL basic example")
 				.getOrCreate();
 		logger.info("Init spark connectos completed");
-	}
-
-	public void startJob(SparkJob job) {
-		job.run();
-	}
-
-	public void startAsyncJob(SparkJob job) {
-		logger.info("Starting async job.");
-		threadPoolService.processJob(new WorkerThread(job));
+		sparkProcesses = new LinkedList<SparkProcess>();
 	}
 
 	public SparkSession getSparkSession() {
@@ -59,6 +63,40 @@ public class SparkService {
 
 	public JavaSparkContext getSparkContext() {
 		return sparkContext;
+	}
+
+	public String process(ChurnModelBuildRequest churnModelBuildRequest) {
+		logger.info("Received process request: {}",churnModelBuildRequest);
+		ChurnModelBuildProcess churnModelBuildProcess = new ChurnModelBuildProcess(this, churnModelBuildRequest);
+		sparkProcesses.add(churnModelBuildProcess);
+		return churnModelBuildProcess.getId();
+	}
+
+	@Scheduled(fixedRate = 10000)
+	private void schedule() {
+		try {
+			logger.info("Spark processes awaiting: {}", sparkProcesses.size());
+			if ((currentProcess == null || currentProcess.getStatus() == SparkProcessStatus.FINISHED)
+					&& sparkProcesses.size() > 0) {
+				logger.info("Polled spark process");
+				currentProcess = sparkProcesses.poll();
+				startProcessing(currentProcess);
+			} else {
+				logger.info("No action in scheduler.");
+			}
+
+		} catch (Exception exc) {
+			logger.error(ExceptionUtils.getFullStackTrace(exc));
+		}
+	}
+
+	private void startProcessing(SparkProcess sparkProcess) {
+		logger.info("Start process spark process with id: {}", sparkProcess.getId());
+		threadPoolService.startThread(new WorkerThread(sparkProcess));
+	}
+
+	public UserEventService getUserEventService() {
+		return userEventService;
 	}
 
 }

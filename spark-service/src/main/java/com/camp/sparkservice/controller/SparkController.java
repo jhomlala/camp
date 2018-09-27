@@ -1,29 +1,23 @@
 package com.camp.sparkservice.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.camp.sparkservice.jobs.ExampleJob;
+import com.camp.sparkservice.domain.ChurnModelBuildRequest;
 import com.camp.sparkservice.service.SparkService;
 
-
 @RestController
-public class ApplicationUserController {
+public class SparkController {
 
-	
 	@Autowired
 	private SparkService sparkService;
 
-	@Autowired
-	private ExampleJob job;
-	
-	@RequestMapping(path = "/test", method = RequestMethod.GET)
-	public String createApplicationUser() {
-		sparkService.startJob(job);
-		return "OK";
+	@RequestMapping(path = "/churn", method = RequestMethod.POST)
+	public String buildChurnModel(@RequestBody ChurnModelBuildRequest churnModelBuildRequest) {
+		return sparkService.process(churnModelBuildRequest);
 	}
-
 
 }

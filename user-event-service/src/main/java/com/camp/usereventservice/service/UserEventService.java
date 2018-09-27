@@ -47,4 +47,8 @@ public class UserEventService {
 				pageRequest);
 	}
 
+	public long countUserEvents(String applicationId, Date startDate, Date endDate) {
+		return userEventRepository.countByApplicationIdAndCreatedAtBetween(applicationId, startDate, endDate);
+	}
+
 }

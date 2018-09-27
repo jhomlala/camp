@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.camp.usereventservice.domain.CreateUserEventRequest;
 import com.camp.usereventservice.domain.UserEvent;
+import com.camp.usereventservice.domain.UserEventCount;
 import com.camp.usereventservice.service.UserEventService;
 
 @RestController
@@ -36,6 +37,13 @@ public class UserEventController {
 			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate,
 			@RequestParam("page") int page, @RequestParam("size") int size) {
 		return userEventService.selectUserEvents(applicationId, startDate, endDate, page, size);
+	}
+
+	@RequestMapping(path = "/{applicationId}/count/", method = RequestMethod.GET)
+	public UserEventCount countUserEventsCount(@PathVariable("applicationId") String applicationId,
+			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate) {
+		return new UserEventCount(userEventService.countUserEvents(applicationId, startDate, endDate));
 	}
 
 }

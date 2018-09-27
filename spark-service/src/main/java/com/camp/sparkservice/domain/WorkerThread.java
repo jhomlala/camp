@@ -1,16 +1,16 @@
 package com.camp.sparkservice.domain;
 
-public class WorkerThread implements Runnable {
+public class WorkerThread extends Thread {
 
-	private SparkJob job;
+	private SparkProcess sparkProcess;
 
-	public WorkerThread(SparkJob job) {
-		this.job = job;
+	public WorkerThread(SparkProcess sparkProcess) {
+		this.sparkProcess = sparkProcess;
 	}
 
-	@Override
 	public void run() {
-		job.run();
+		System.out.println("Run");
+		sparkProcess.execute();
 	}
 
 }

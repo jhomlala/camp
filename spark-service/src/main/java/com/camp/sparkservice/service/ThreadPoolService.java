@@ -16,7 +16,7 @@ public class ThreadPoolService {
 		executorService = Executors.newFixedThreadPool(5);
 	}
 
-	public void processJob(WorkerThread thread) {
+	public void startThread(WorkerThread thread) {
 		executorService.execute(thread);
 	}
 

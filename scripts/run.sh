@@ -35,7 +35,7 @@ fi
 if [ "$1" = "user-event-service" ]
 then
     echo "Start user event service"
-    file=$(find ../notification-user-event-service/target/ -type f -name "*.jar")
+    file=$(find ../user-event-service/target/ -type f -name "*.jar")
 fi
 if [ ${#file} -ge 1 ]; then
 	echo "Starting jar: $file"

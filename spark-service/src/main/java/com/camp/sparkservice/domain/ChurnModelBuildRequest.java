@@ -31,6 +31,11 @@ public class ChurnModelBuildRequest {
 	public void setSignInEventCategory(String signInEventCategory) {
 		this.signInEventCategory = signInEventCategory;
 	}
+	@Override
+	public String toString() {
+		return "ChurnModelBuildRequest [applicationId=" + applicationId + ", startDate=" + startDate + ", endDate="
+				+ endDate + ", signInEventCategory=" + signInEventCategory + "]";
+	}
 	
 	
 }
