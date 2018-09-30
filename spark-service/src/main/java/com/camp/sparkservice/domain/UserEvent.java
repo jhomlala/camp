@@ -1,8 +1,14 @@
 package com.camp.sparkservice.domain;
 
-import java.util.Date;
+import java.io.Serializable;
+import java.sql.Date;
 
-public class UserEvent {
+
+public class UserEvent implements Serializable {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -5141441390181997404L;
 	// applicationId parameter was skipped because we don't need it in spark
 	// processing
 	private Date createdAt;

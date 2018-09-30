@@ -1,11 +1,18 @@
 package com.camp.sparkservice.domain;
 
+import java.io.Serializable;
 import java.util.Date;
 import java.util.UUID;
 
+import org.apache.spark.sql.SparkSession;
+
 import com.camp.sparkservice.service.SparkService;
 
-public abstract class SparkProcess {
+public abstract class SparkProcess implements Serializable {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 6324744500698184894L;
 	private SparkService sparkService;
 	private String id;
 	protected SparkProcessStatus status;
@@ -40,6 +47,10 @@ public abstract class SparkProcess {
 
 	public int getStep() {
 		return step;
+	}
+	
+	public SparkSession sparkSession() {
+		return sparkService.getSparkSession();
 	}
 
 	public abstract void execute();
