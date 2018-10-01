@@ -6,6 +6,7 @@ public class ChurnModelBuildRequest {
 	private String applicationId;
 	private Date startDate;
 	private Date endDate;
+	private Long daysActive;
 	private String signInEventCategory;
 	private String registerEventCategory;
 
@@ -49,10 +50,19 @@ public class ChurnModelBuildRequest {
 		this.registerEventCategory = registerEventCategory;
 	}
 
+	public Long getDaysActive() {
+		return daysActive;
+	}
+
+	public void setDaysActive(Long daysActive) {
+		this.daysActive = daysActive;
+	}
+
 	@Override
 	public String toString() {
 		return "ChurnModelBuildRequest [applicationId=" + applicationId + ", startDate=" + startDate + ", endDate="
-				+ endDate + ", signInEventCategory=" + signInEventCategory + "]";
+				+ endDate + ", daysActive=" + daysActive + ", signInEventCategory=" + signInEventCategory
+				+ ", registerEventCategory=" + registerEventCategory + "]";
 	}
 
 }
