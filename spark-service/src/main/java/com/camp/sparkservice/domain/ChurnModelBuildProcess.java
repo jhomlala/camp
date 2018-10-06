@@ -1,17 +1,21 @@
 package com.camp.sparkservice.domain;
-import org.apache.spark.ml.Pipeline;
-import org.apache.spark.ml.PipelineModel;
-import org.apache.spark.ml.PipelineStage;
-import org.apache.spark.ml.classification.GBTClassifier;
-import org.apache.spark.ml.feature.*;
-import static org.apache.spark.sql.functions.*;
-import java.io.Serializable;
+
+import static org.apache.spark.sql.functions.when;
+
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.ForeachFunction;
-import org.apache.spark.sql.Column;
+import org.apache.spark.ml.Pipeline;
+import org.apache.spark.ml.PipelineModel;
+import org.apache.spark.ml.PipelineStage;
+import org.apache.spark.ml.classification.GBTClassifier;
+import org.apache.spark.ml.feature.IndexToString;
+import org.apache.spark.ml.feature.StringIndexer;
+import org.apache.spark.ml.feature.StringIndexerModel;
+import org.apache.spark.ml.feature.VectorAssembler;
+import org.apache.spark.ml.feature.VectorIndexer;
+import org.apache.spark.ml.feature.VectorIndexerModel;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
@@ -20,6 +24,10 @@ import org.slf4j.LoggerFactory;
 import com.camp.sparkservice.service.SparkService;
 
 public class ChurnModelBuildProcess extends SparkProcess {
+
+	private static final long serialVersionUID = 1990293965273645689L;
+
+	private final int PAGE_SIZE = 100;
 
 	private Logger logger = LoggerFactory.getLogger(ChurnModelBuildProcess.class);
 
@@ -30,35 +38,30 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		this.request = request;
 	}
 
-	/*
-	 * 1. Load data from UserEvent table for given application 2. If data fits in
-	 * memory, process it, otherwise save it to temp file in disk 3. Load data into
-	 * spark 4. Find top events without sing-in event 5. Find unique users 6.
-	 * Calculate counts for events for each user 7. Decide which user is out of app
-	 * (inactive more than x days) 8. Generate GBT or other tree based algorithm 9.
-	 * Test model (AUROC, matrix) 10 Save model if ok otherwise inform about lack of
-	 * data
-	 */
 	@Override
 	public void execute() {
 		this.setStatus(SparkProcessStatus.PROCESSING);
-		logger.info("Start processing!");
+		logger.info("Started churn mogel build process");
+
+		/*
+		 *  Step 1: Model data setup
+		 */
 		long eventCount = countEvents();
-		logger.info("Events found for application: {}", eventCount);
-		List<UserEvent> events = selectUserEvents(0, 100);
-		logger.info("Events: {}", events.size());
+		logger.info("Count of events, found for build process: {}", eventCount);
+		List<UserEvent> events = loadUserEvents(eventCount);
+
+		logger.info("Count of events downloaded from database for build process: {}", events.size());
 		JavaRDD<UserEvent> eventsRDD = getSparkService().getSparkContext().parallelize(events);
 		Dataset<Row> eventsDF = sparkSession().createDataFrame(eventsRDD, UserEvent.class);
 
-		logger.info("**** Events: {}", eventsDF.count());
-		eventsDF.select("category").show();
-
 		Dataset<Row> registerEventsDF = eventsDF
 				.where(eventsDF.col("category").equalTo(request.getRegisterEventCategory()));
-		logger.info("**** Register events: {}", registerEventsDF.count());
+		logger.info("Count of register events: {}", registerEventsDF.count());
+
 		Dataset<Row> uniqueUsersDF = registerEventsDF.groupBy("userId").count();
 		uniqueUsersDF = uniqueUsersDF.withColumnRenamed("userId", "userId2");
-		logger.info("**** Unique users: {}", uniqueUsersDF.count());
+
+		logger.info("Count of unique users:", uniqueUsersDF.count());
 		Dataset<Row> uniqueUsersRegisteredDF = registerEventsDF.join(uniqueUsersDF,
 				registerEventsDF.col("userId").equalTo(uniqueUsersDF.col("userId2")));
 
@@ -66,16 +69,87 @@ public class ChurnModelBuildProcess extends SparkProcess {
 				uniqueUsersRegisteredDF.col("createdAt"));
 		uniqueUsersRegisteredDF.show();
 
-		Dataset<Row> uniqueEventCategories = eventsDF.groupBy("category").count().select("category");
-		List<Row> categoriesAsRowsList = uniqueEventCategories.collectAsList();
-		List<String> categories = new ArrayList<String>();
-		for (Row categoryRow : categoriesAsRowsList) {
-			categories.add(categoryRow.mkString());
-		}
+		List<String> categories = selectUniqueEventCategories(eventsDF);
+		Dataset<Row> eventsCountDF = countUniqueEvents(eventsDF, uniqueUsersDF, categories);
 
-		Dataset<Row> eventsCountDF = uniqueUsersDF;
+		Dataset<Row> diffBetweenLastAndFirstEventDF = calculateDiffBetweenFirstAndLastEvent(eventsDF);
+		Dataset<Row> usersDataDF = setupTrainingDF(eventsCountDF, diffBetweenLastAndFirstEventDF);
+		String[] cols = usersDataDF.drop("label").columns();
+
+		/*
+		 *  Step 2: Model training
+		 */
+		
+		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
+		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("label", "features");
+		usersDataAssembledAsVector.show();
+
+		StringIndexerModel labelIndexer = setupLabelIndexer(usersDataAssembledAsVector);
+		VectorIndexerModel featureIndexer = setupFeaturesIndexer(usersDataAssembledAsVector);
+		Dataset<Row>[] splits = usersDataAssembledAsVector.randomSplit(new double[] { 0.7, 0.3 });
+		Dataset<Row> trainingData = splits[0];
+		Dataset<Row> testData = splits[1];
+
+		PipelineModel model = trainModel(labelIndexer, featureIndexer, trainingData);
+		Dataset<Row> predictions = model.transform(testData);
+		predictions.select("predictedLabel", "label", "features").show(5);
+		this.setStatus(SparkProcessStatus.FINISHED);
+		logger.info("Finished processing!");
+	}
+
+	private PipelineModel trainModel(StringIndexerModel labelIndexer, VectorIndexerModel featureIndexer,
+			Dataset<Row> trainingData) {
+		GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedLabel").setFeaturesCol("indexedFeatures")
+				.setMaxIter(10);
+
+		IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("predictedLabel")
+				.setLabels(labelIndexer.labels());
+
+		Pipeline pipeline = new Pipeline()
+				.setStages(new PipelineStage[] { labelIndexer, featureIndexer, gbt, labelConverter });
+
+		PipelineModel model = pipeline.fit(trainingData);
+		return model;
+	}
+
+	private VectorIndexerModel setupFeaturesIndexer(Dataset<Row> usersDataAssembledAsVector) {
+		return new VectorIndexer().setInputCol("features").setOutputCol("indexedFeatures").setMaxCategories(4)
+				.fit(usersDataAssembledAsVector);
+	}
+
+	private StringIndexerModel setupLabelIndexer(Dataset<Row> usersDataAssembledAsVector) {
+		return new StringIndexer().setInputCol("label").setOutputCol("indexedLabel")
+				.fit(usersDataAssembledAsVector);
+		
+	}
+
+	private Dataset<Row> setupTrainingDF(Dataset<Row> eventsCountDF, Dataset<Row> diffBetweenLastAndFirstEventDF) {
+		Dataset<Row> usersDataDF = eventsCountDF.join(diffBetweenLastAndFirstEventDF, "userId");
+		usersDataDF = usersDataDF.withColumn("label", when(usersDataDF.col("diff").geq(604800), 1).otherwise(0));
+		usersDataDF = usersDataDF.drop("userId");
+		return usersDataDF;
+	}
+
+	private Dataset<Row> calculateDiffBetweenFirstAndLastEvent(Dataset<Row> eventsDF) {
+		Dataset<Row> eventsWithChangedDateToTimestamp = eventsDF.withColumn("createdAtTimestamp",
+				eventsDF.col("createdAt").cast("timestamp"));
+
+		Dataset<Row> lastEventDF = eventsWithChangedDateToTimestamp.groupBy("userId")
+				.agg(org.apache.spark.sql.functions.max("createdAtTimestamp").as("maxEventTime"));
+		Dataset<Row> firstEventDF = eventsWithChangedDateToTimestamp.groupBy("userId")
+				.agg(org.apache.spark.sql.functions.min("createdAtTimestamp").as("minEventTime"));
+
+		Dataset<Row> lastAndFirstEventDF = lastEventDF.join(firstEventDF, "userId");
+		lastAndFirstEventDF = lastAndFirstEventDF.withColumn("diff", lastAndFirstEventDF.col("maxEventTime")
+				.cast("long").minus(lastAndFirstEventDF.col("minEventTime").cast("long")));
+		lastAndFirstEventDF = lastAndFirstEventDF.select("userId", "diff");
+		return lastAndFirstEventDF;
+	}
+
+	private Dataset<Row> countUniqueEvents(Dataset<Row> eventsDF, Dataset<Row> uniqueUsersDF, List<String> categories) {
+		Dataset<Row> eventsCountDF = uniqueUsersDF.select("userId2", "count");
 		for (String category : categories) {
-			logger.info("**** CATEGORY: {}", category);
+			logger.info("Processing category: {}", category);
 			Dataset<Row> categoryDF = eventsDF.select("userId", "category");
 			categoryDF = categoryDF.where(categoryDF.col("category").equalTo(category)).groupBy("userId").count();
 			categoryDF = categoryDF.withColumnRenamed("count", category.toLowerCase() + "_event_count");
@@ -88,85 +162,26 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		for (String category : categories) {
 			eventsCountDF = eventsCountDF.drop(eventsCountDF.col("userId_" + category));
 		}
-		eventsCountDF.show();
+		return eventsCountDF;
+	}
 
-		Dataset<Row> eventsWithChangedDateToTimestamp = eventsDF.withColumn("createdAtTimestamp",
-				eventsDF.col("createdAt").cast("timestamp"));
+	private List<String> selectUniqueEventCategories(Dataset<Row> eventsDF) {
+		Dataset<Row> uniqueEventCategories = eventsDF.groupBy("category").count().select("category");
+		List<Row> categoriesAsRowsList = uniqueEventCategories.collectAsList();
+		List<String> categories = new ArrayList<String>();
+		for (Row categoryRow : categoriesAsRowsList) {
+			categories.add(categoryRow.mkString());
+		}
+		return categories;
+	}
 
-		Dataset<Row> lastEventDF = eventsWithChangedDateToTimestamp.groupBy("userId")
-				.agg(org.apache.spark.sql.functions.max("createdAtTimestamp").as("maxEventTime"));
-		Dataset<Row> firstEventDF = eventsWithChangedDateToTimestamp.groupBy("userId")
-				.agg(org.apache.spark.sql.functions.min("createdAtTimestamp").as("minEventTime"));
-
-		lastEventDF.show();
-		firstEventDF.show();
-
-		Dataset<Row> lastAndFirstEventDF = lastEventDF.join(firstEventDF, "userId");
-		lastAndFirstEventDF = lastAndFirstEventDF.withColumn("diff", lastAndFirstEventDF.col("maxEventTime")
-				.cast("long").minus(lastAndFirstEventDF.col("minEventTime").cast("long")));
-		lastAndFirstEventDF = lastAndFirstEventDF.select("userId", "diff");
-		lastAndFirstEventDF.show();
-
-		Dataset<Row> usersDataDF = eventsCountDF.join(lastAndFirstEventDF, "userId");
-		usersDataDF = usersDataDF.withColumn("label", when(usersDataDF.col("diff").geq(604800),1).otherwise(0));
-		usersDataDF = usersDataDF.drop("userId");
-		usersDataDF.show();
-		
-		String cols[] = usersDataDF.drop("label").columns();
-		
-		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
-		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("label","features");
-		usersDataAssembledAsVector.show();
-		
-		
-		
-		// Index labels, adding metadata to the label column.
-		// Fit on whole dataset to include all labels in index.
-		StringIndexerModel labelIndexer = new StringIndexer()
-		  .setInputCol("label")
-		  .setOutputCol("indexedLabel")
-		  .fit(usersDataAssembledAsVector);
-		// Automatically identify categorical features, and index them.
-		// Set maxCategories so features with > 4 distinct values are treated as continuous.
-		VectorIndexerModel featureIndexer = new VectorIndexer()
-		  .setInputCol("features")
-		  .setOutputCol("indexedFeatures")
-		  .setMaxCategories(4)
-		  .fit(usersDataAssembledAsVector);
-
-		// Split the data into training and test sets (30% held out for testing)
-		Dataset<Row>[] splits = usersDataAssembledAsVector.randomSplit(new double[] {0.7, 0.3});
-		Dataset<Row> trainingData = splits[0];
-		Dataset<Row> testData = splits[1];
-
-
-		// Train a GBT model.
-		GBTClassifier gbt = new GBTClassifier()
-		  .setLabelCol("indexedLabel")
-		  .setFeaturesCol("indexedFeatures")
-		  .setMaxIter(10);
-
-		// Convert indexed labels back to original labels.
-		IndexToString labelConverter = new IndexToString()
-		  .setInputCol("prediction")
-		  .setOutputCol("predictedLabel")
-		  .setLabels(labelIndexer.labels());
-
-		// Chain indexers and GBT in a Pipeline.
-		Pipeline pipeline = new Pipeline()
-		  .setStages(new PipelineStage[] {labelIndexer, featureIndexer, gbt, labelConverter});
-
-		// Train model. This also runs the indexers.
-		PipelineModel model = pipeline.fit(trainingData);
-
-		// Make predictions.
-		Dataset<Row> predictions = model.transform(testData);
-
-		// Select example rows to display.
-		predictions.select("predictedLabel", "label", "features").show(5);
-
-		this.setStatus(SparkProcessStatus.FINISHED);
-		logger.info("Finished processing!");
+	public List<UserEvent> loadUserEvents(long count) {
+		List<UserEvent> userEvents = new ArrayList<>();
+		int selectIterations = (int) Math.ceil(count / (double) PAGE_SIZE);
+		for (int iteration = 0; iteration <= selectIterations; iteration++) {
+			userEvents.addAll(selectUserEvents(selectIterations, PAGE_SIZE));
+		}
+		return userEvents;
 	}
 
 	private long countEvents() {
