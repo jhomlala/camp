@@ -46,4 +46,21 @@ public class UserEventController {
 		return new UserEventCount(userEventService.countUserEvents(applicationId, startDate, endDate));
 	}
 
+	@RequestMapping(path = "/{applicationId}/{userId}", method = RequestMethod.GET)
+	public List<UserEvent> selectUserEvents(@PathVariable("applicationId") String applicationId,
+			@PathVariable("userId") String userId,
+			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate,
+			@RequestParam("page") int page, @RequestParam("size") int size) {
+		return userEventService.selectUserEvents(applicationId, userId, startDate, endDate, page, size);
+	}
+
+	@RequestMapping(path = "/{applicationId}/{userId}/count/", method = RequestMethod.GET)
+	public UserEventCount countUserEventsCount(@PathVariable("applicationId") String applicationId,
+			@PathVariable("userId") String userId,
+			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate) {
+		return new UserEventCount(userEventService.countUserEvents(applicationId, userId, startDate, endDate));
+	}
+
 }

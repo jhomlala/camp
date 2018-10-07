@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class SparkServiceApplication {
  
 	public static void main(String[] args) {
+		
 		SpringApplication.run(SparkServiceApplication.class, args);
 	}
 }

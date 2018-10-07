@@ -9,9 +9,8 @@ import org.springframework.stereotype.Component;
 import com.camp.sparkservice.domain.UserEvent;
 import com.camp.sparkservice.domain.UserEventCount;
 
-
 @Component
-public class UserEventClientFallback implements UserEventClient{
+public class UserEventClientFallback implements UserEventClient {
 
 	@Override
 	public List<UserEvent> getUserEvents(String applicationId, Date startDate, Date endDate, int page, int size) {
@@ -23,6 +22,15 @@ public class UserEventClientFallback implements UserEventClient{
 		return new UserEventCount(0l);
 	}
 
+	@Override
+	public List<UserEvent> getUserEvents(String applicationId, String userId, Date startDate, Date endDate, int page,
+			int size) {
+		return Collections.emptyList();
+	}
 
+	@Override
+	public UserEventCount countUserEvents(String applicationId, String userId, Date startDate, Date endDate) {
+		return new UserEventCount(0l);
+	}
 
 }

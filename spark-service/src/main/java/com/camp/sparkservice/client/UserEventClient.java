@@ -21,10 +21,23 @@ public interface UserEventClient {
 			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
 			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate,
 			@RequestParam("page") int page, @RequestParam("size") int size);
-	
+
 	@RequestMapping(method = RequestMethod.GET, value = "/userevent/{applicationId}/count/", consumes = MediaType.APPLICATION_JSON_UTF8_VALUE)
 	UserEventCount countUserEvents(@PathVariable("applicationId") String applicationId,
 			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
 			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate);
-	
+
+	@RequestMapping(method = RequestMethod.GET, value = "/userevent/{applicationId}/{userId}/", consumes = MediaType.APPLICATION_JSON_UTF8_VALUE)
+	List<UserEvent> getUserEvents(@PathVariable("applicationId") String applicationId,
+			@PathVariable("userId") String userId,
+			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate,
+			@RequestParam("page") int page, @RequestParam("size") int size);
+
+	@RequestMapping(method = RequestMethod.GET, value = "/userevent/{applicationId}/{userId}/count/", consumes = MediaType.APPLICATION_JSON_UTF8_VALUE)
+	UserEventCount countUserEvents(@PathVariable("applicationId") String applicationId,
+			@PathVariable("userId") String userId,
+			@RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+			@RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate);
+
 }

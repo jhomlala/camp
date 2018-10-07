@@ -50,5 +50,17 @@ public class UserEventService {
 	public long countUserEvents(String applicationId, Date startDate, Date endDate) {
 		return userEventRepository.countByApplicationIdAndCreatedAtBetween(applicationId, startDate, endDate);
 	}
+	
+	public List<UserEvent> selectUserEvents(String applicationId, String userId,Date startDate, Date endDate, int page, int size) {
+		logger.info("ApplicationId: {}, startDate: {}, endDate: {}, page: {}, size: {}", applicationId, startDate,
+				endDate, page, size);
+		PageRequest pageRequest = PageRequest.of(page, size);
+		return userEventRepository.findByApplicationIdAndCreatedAtBetweenAndUserId(applicationId, startDate, endDate, userId,
+				pageRequest);
+	}
+
+	public long countUserEvents(String applicationId, String userId, Date startDate, Date endDate) {
+		return userEventRepository.countByApplicationIdAndCreatedAtBetweenAndUserId(applicationId, startDate, endDate, userId);
+	}
 
 }

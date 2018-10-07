@@ -13,9 +13,8 @@ public class UserEvent {
 	private String applicationId;
 	@PrimaryKeyColumn(ordinal = 1, type = PrimaryKeyType.CLUSTERED)
 	private Date createdAt;
-	@PrimaryKeyColumn(ordinal = 2, type = PrimaryKeyType.CLUSTERED)
+	
 	private String userId;
-	@PrimaryKeyColumn(ordinal = 3, type = PrimaryKeyType.CLUSTERED)
 	private String id;
 	private String category;
 	private String content;

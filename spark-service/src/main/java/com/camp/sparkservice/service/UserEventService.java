@@ -26,4 +26,13 @@ public class UserEventService {
 		logger.info("ApplicationId: {}, startDate: {}, endDate: {}", applicationId, startDate, endDate);
 		return userEventClient.countUserEvents(applicationId, startDate, endDate);
 	}
+	
+	public List<UserEvent> selectUserEvents(String applicationId, String userId, Date startDate, Date endDate, int page, int size) {
+		return userEventClient.getUserEvents(applicationId, userId, startDate, endDate, page, size);
+	}
+
+	public UserEventCount countUserEvent(String applicationId, String userId, Date startDate, Date endDate) {
+		logger.info("ApplicationId: {}, startDate: {}, endDate: {}", applicationId, startDate, endDate);
+		return userEventClient.countUserEvents(applicationId, userId, startDate, endDate);
+	}
 }

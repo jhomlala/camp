@@ -2,7 +2,12 @@ package com.camp.sparkservice.domain;
 
 import static org.apache.spark.sql.functions.when;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -22,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.camp.sparkservice.service.SparkService;
+import com.google.gson.Gson;
 
 public class ChurnModelBuildProcess extends SparkProcess {
 
@@ -36,6 +42,7 @@ public class ChurnModelBuildProcess extends SparkProcess {
 	public ChurnModelBuildProcess(SparkService sparkService, ChurnModelBuildRequest request) {
 		super(sparkService);
 		this.request = request;
+
 	}
 
 	@Override
@@ -44,7 +51,7 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		logger.info("Started churn mogel build process");
 
 		/*
-		 *  Step 1: Model data setup
+		 * Step 1: Model data setup
 		 */
 		long eventCount = countEvents();
 		logger.info("Count of events, found for build process: {}", eventCount);
@@ -77,9 +84,9 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		String[] cols = usersDataDF.drop("label").columns();
 
 		/*
-		 *  Step 2: Model training
+		 * Step 2: Model training
 		 */
-		
+
 		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
 		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("label", "features");
 		usersDataAssembledAsVector.show();
@@ -93,8 +100,47 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		PipelineModel model = trainModel(labelIndexer, featureIndexer, trainingData);
 		Dataset<Row> predictions = model.transform(testData);
 		predictions.select("predictedLabel", "label", "features").show(5);
+
+		saveModel(model);
+		saveCategories(categories);
+
 		this.setStatus(SparkProcessStatus.FINISHED);
 		logger.info("Finished processing!");
+	}
+
+	private void saveCategories(List<String> categories) {
+		try {
+			String filePath = "/Users/user/Documents/models/churn/" + request.getApplicationId() + "/categories.json";
+			String content = getSparkService().getGson().toJson(categories);
+			Files.write(Paths.get(filePath), content.getBytes());
+			logger.info("Saved categories to files");
+		} catch (Exception exc) {
+			exc.printStackTrace();
+		}
+	}
+
+	private void saveModel(PipelineModel model) {
+		try {
+			logger.info("Saving model");
+			String rootPath = "/Users/user/Documents/models/churn/" + request.getApplicationId();
+			File dir = new File(rootPath);
+			if (dir.exists()) {
+				deleteDirectoryStream(Paths.get(rootPath));
+				dir.delete();
+			}
+			model.save(rootPath);
+			logger.info("Model saved");
+		} catch (Exception exc) {
+			exc.printStackTrace();
+		}
+	}
+
+	private void deleteDirectoryStream(Path path) {
+		try {
+			Files.walk(path).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+		} catch (Exception exc) {
+			exc.printStackTrace();
+		}
 	}
 
 	private PipelineModel trainModel(StringIndexerModel labelIndexer, VectorIndexerModel featureIndexer,
@@ -108,6 +154,9 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		Pipeline pipeline = new Pipeline()
 				.setStages(new PipelineStage[] { labelIndexer, featureIndexer, gbt, labelConverter });
 
+		logger.info("Training data: ");
+		trainingData.show();
+
 		PipelineModel model = pipeline.fit(trainingData);
 		return model;
 	}
@@ -118,9 +167,8 @@ public class ChurnModelBuildProcess extends SparkProcess {
 	}
 
 	private StringIndexerModel setupLabelIndexer(Dataset<Row> usersDataAssembledAsVector) {
-		return new StringIndexer().setInputCol("label").setOutputCol("indexedLabel")
-				.fit(usersDataAssembledAsVector);
-		
+		return new StringIndexer().setInputCol("label").setOutputCol("indexedLabel").fit(usersDataAssembledAsVector);
+
 	}
 
 	private Dataset<Row> setupTrainingDF(Dataset<Row> eventsCountDF, Dataset<Row> diffBetweenLastAndFirstEventDF) {

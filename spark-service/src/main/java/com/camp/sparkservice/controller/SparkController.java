@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.camp.sparkservice.domain.ChurnModelBuildRequest;
+import com.camp.sparkservice.domain.ChurnPredictRequest;
 import com.camp.sparkservice.service.SparkService;
 
 @RestController
@@ -17,6 +18,11 @@ public class SparkController {
 
 	@RequestMapping(path = "/churn", method = RequestMethod.POST)
 	public String buildChurnModel(@RequestBody ChurnModelBuildRequest churnModelBuildRequest) {
+		return sparkService.process(churnModelBuildRequest);
+	}
+	
+	@RequestMapping(path = "/churn/predict", method = RequestMethod.POST)
+	public String predictChurn(@RequestBody ChurnPredictRequest churnModelBuildRequest) {
 		return sparkService.process(churnModelBuildRequest);
 	}
 

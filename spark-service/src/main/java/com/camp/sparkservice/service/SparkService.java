@@ -19,9 +19,12 @@ import org.springframework.stereotype.Service;
 import com.camp.sparkservice.config.ApplicationConfiguration;
 import com.camp.sparkservice.domain.ChurnModelBuildProcess;
 import com.camp.sparkservice.domain.ChurnModelBuildRequest;
+import com.camp.sparkservice.domain.ChurnPredictRequest;
+import com.camp.sparkservice.domain.ChurnPredictionProcess;
 import com.camp.sparkservice.domain.SparkProcess;
 import com.camp.sparkservice.domain.SparkProcessStatus;
 import com.camp.sparkservice.domain.WorkerThread;
+import com.google.gson.Gson;
 
 @Service
 @Scope("singleton")
@@ -41,6 +44,8 @@ public class SparkService {
 	private Queue<SparkProcess> sparkProcesses;
 	private SparkProcess currentProcess;
 
+	private Gson gson;
+	
 	@PostConstruct
 	public void init() {
 		logger.info("Init spark connectors");
@@ -49,8 +54,11 @@ public class SparkService {
 		sparkContext = new JavaSparkContext(sparkConf);
 		sparkSession = SparkSession.builder().sparkContext(sparkContext.sc()).appName("Java Spark SQL basic example")
 				.getOrCreate();
+		sparkSession.sparkContext().setLogLevel("ERROR");
 		logger.info("Init spark connectos completed");
 		sparkProcesses = new LinkedList<SparkProcess>();
+		gson = new Gson();
+	
 	}
 
 	public SparkSession getSparkSession() {
@@ -99,4 +107,14 @@ public class SparkService {
 		return userEventService;
 	}
 
+	public String process(ChurnPredictRequest churnPredictRequest) {
+		logger.info("Received churn predict request: {}", churnPredictRequest);
+		ChurnPredictionProcess churnPredictProcess = new ChurnPredictionProcess(this,churnPredictRequest);
+		sparkProcesses.add(churnPredictProcess);
+		return churnPredictProcess.getId();
+	}
+
+	public Gson getGson() {
+		return gson;
+	}
 }
