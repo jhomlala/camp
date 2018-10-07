@@ -1,5 +1,5 @@
-# camp
-:star2: Camp - notifications for mobile devices
+# :star2: Camp
+Intelligent notifications for mobile devices
 
 Build in microservices architecture, using Spring Boot, Cassandra and Spark.
 
