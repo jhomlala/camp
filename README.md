@@ -1,7 +1,7 @@
 # camp
 Camp - notifications for mobile devices
 
-Build in microservices architecture, using Spring Boot and Cassandra.
+Build in microservices architecture, using Spring Boot, Cassandra and Spark.
 
 Modules:
 * application-service - handles mobile application operations
