@@ -6,6 +6,7 @@ import java.util.Queue;
 import javax.annotation.PostConstruct;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.log4j.Level;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -54,11 +55,10 @@ public class SparkService {
 		sparkContext = new JavaSparkContext(sparkConf);
 		sparkSession = SparkSession.builder().sparkContext(sparkContext.sc()).appName("Java Spark SQL basic example")
 				.getOrCreate();
-		sparkSession.sparkContext().setLogLevel("ERROR");
 		logger.info("Init spark connectos completed");
 		sparkProcesses = new LinkedList<SparkProcess>();
 		gson = new Gson();
-	
+		
 	}
 
 	public SparkSession getSparkSession() {
