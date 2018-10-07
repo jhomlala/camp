@@ -10,13 +10,19 @@ import java.util.List;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.ml.PipelineModel;
+import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 import com.camp.sparkservice.service.SparkService;
 import com.google.common.reflect.TypeToken;
+
+import org.apache.spark.sql.functions;
+import scala.collection.immutable.Set;
+import scala.collection.mutable.Buffer;
 
 public class ChurnPredictionProcess extends SparkProcess {
 	private final int PAGE_SIZE = 100;
@@ -46,6 +52,9 @@ public class ChurnPredictionProcess extends SparkProcess {
 		JavaRDD<UserEvent> eventsRDD = getSparkService().getSparkContext().parallelize(events);
 		Dataset<Row> eventsDF = sparkSession().createDataFrame(eventsRDD, UserEvent.class);
 
+		logger.info("Events:");
+		eventsDF.show();
+		
 		List<String> categories = selectModelCategories();
 		Dataset<Row> eventsCountDF = countUniqueEvents(eventsDF, categories);
 
@@ -53,11 +62,16 @@ public class ChurnPredictionProcess extends SparkProcess {
 		
 		Dataset<Row> diffBetweenLastAndFirstEventDF = calculateDiffBetweenFirstAndLastEvent(eventsDF);
 		Dataset<Row> usersDataDF = setupTrainingDF(eventsCountDF, diffBetweenLastAndFirstEventDF);
-
+		logger.info(" Users DF: ");
 		usersDataDF.show();
+		String[] cols = usersDataDF.drop("label").columns();
+		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
+		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("features");
+		usersDataAssembledAsVector.show();
+		
 		
 		PipelineModel model = PipelineModel.load("/Users/user/Documents/models/churn/" + request.getApplicationId());
-		Dataset<Row> predictions = model.transform(usersDataDF);
+		Dataset<Row> predictions = model.transform(usersDataAssembledAsVector);
 		
 		logger.info("Predictions:");
 		predictions.show();
@@ -80,7 +94,6 @@ public class ChurnPredictionProcess extends SparkProcess {
 
 	private Dataset<Row> setupTrainingDF(Dataset<Row> eventsCountDF, Dataset<Row> diffBetweenLastAndFirstEventDF) {
 		Dataset<Row> usersDataDF = eventsCountDF.join(diffBetweenLastAndFirstEventDF, "userId");
-		usersDataDF = usersDataDF.withColumn("label", when(usersDataDF.col("diff").geq(604800), 1).otherwise(0));
 		usersDataDF = usersDataDF.drop("userId");
 		return usersDataDF;
 	}
@@ -102,15 +115,30 @@ public class ChurnPredictionProcess extends SparkProcess {
 	}
 
 	private Dataset<Row> countUniqueEvents(Dataset<Row> eventsDF, List<String> categories) {
+		logger.info("Categories: {}",categories);
 		Dataset<Row> eventsCountDF = eventsDF.groupBy("userId").count().withColumnRenamed("userId", "userId2");
+		Dataset<Row> mockDF = eventsCountDF.select("userId2");
+		
+		eventsCountDF.show();
 		for (String category : categories) {
 			logger.info("Processing category: {}", category);
 			Dataset<Row> categoryDF = eventsDF.select("userId", "category");
 			categoryDF = categoryDF.where(categoryDF.col("category").equalTo(category)).groupBy("userId").count();
 			categoryDF = categoryDF.withColumnRenamed("count", category.toLowerCase() + "_event_count");
 			categoryDF = categoryDF.withColumnRenamed("userId", "userId_" + category);
+			if (categoryDF.count() == 0) {
+				Dataset<Row> mockCategoryDF = mockDF.withColumnRenamed("userId2", "userId_" + category);
+				mockCategoryDF = mockCategoryDF.withColumn(category.toLowerCase() + "_event_count", functions.lit(0));
+				categoryDF = mockCategoryDF;
+			}
+			logger.info("CategoryDF:");
+			categoryDF.show();
+			
 			eventsCountDF = eventsCountDF.join(categoryDF,
 					eventsCountDF.col("userId2").equalTo(categoryDF.col("userId_" + category)));
+			logger.info("After join: ");
+			eventsCountDF.show();
+			
 		}
 		eventsCountDF = eventsCountDF.withColumnRenamed("userId2", "userId");
 		eventsCountDF = eventsCountDF.drop("count");

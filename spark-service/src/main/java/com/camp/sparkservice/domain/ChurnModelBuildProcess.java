@@ -87,10 +87,15 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		 * Step 2: Model training
 		 */
 
+		logger.info("Users Data DF:");
+		usersDataDF.show();
 		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
 		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("label", "features");
+		
+		logger.info("Users Data as vector DF:");
 		usersDataAssembledAsVector.show();
 
+		
 		StringIndexerModel labelIndexer = setupLabelIndexer(usersDataAssembledAsVector);
 		VectorIndexerModel featureIndexer = setupFeaturesIndexer(usersDataAssembledAsVector);
 		Dataset<Row>[] splits = usersDataAssembledAsVector.randomSplit(new double[] { 0.7, 0.3 });
