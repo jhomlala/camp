@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineModel;
@@ -27,13 +28,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.camp.sparkservice.service.SparkService;
-import com.google.gson.Gson;
 
 public class ChurnModelBuildProcess extends SparkProcess {
 
 	private static final long serialVersionUID = 1990293965273645689L;
-
-	private final int PAGE_SIZE = 100;
+	private static final int pageSize = 100;
 
 	private Logger logger = LoggerFactory.getLogger(ChurnModelBuildProcess.class);
 
@@ -47,96 +46,98 @@ public class ChurnModelBuildProcess extends SparkProcess {
 
 	@Override
 	public void execute() {
-		this.setStatus(SparkProcessStatus.PROCESSING);
-		logger.info("Started churn mogel build process");
+		try {
+			this.setStatus(SparkProcessStatus.PROCESSING);
+			logger.info("Started churn mogel build process");
 
-		/*
-		 * Step 1: Model data setup
-		 */
-		long eventCount = countEvents();
-		logger.info("Count of events, found for build process: {}", eventCount);
-		List<UserEvent> events = loadUserEvents(eventCount);
+			long eventCount = countEvents();
+			logger.info("Count of events, found for build process: {}", eventCount);
+			List<UserEvent> events = loadUserEvents(eventCount);
 
-		logger.info("Count of events downloaded from database for build process: {}", events.size());
-		JavaRDD<UserEvent> eventsRDD = getSparkService().getSparkContext().parallelize(events);
-		Dataset<Row> eventsDF = sparkSession().createDataFrame(eventsRDD, UserEvent.class);
+			logger.info("Count of events downloaded from database for build process: {}", events.size());
+			JavaRDD<UserEvent> eventsRDD = getSparkService().getSparkContext().parallelize(events);
+			Dataset<Row> eventsDF = sparkSession().createDataFrame(eventsRDD, UserEvent.class);
 
-		Dataset<Row> registerEventsDF = eventsDF
-				.where(eventsDF.col("category").equalTo(request.getRegisterEventCategory()));
-		logger.info("Count of register events: {}", registerEventsDF.count());
+			Dataset<Row> registerEventsDF = eventsDF
+					.where(eventsDF.col("category").equalTo(request.getRegisterEventCategory()));
+			logger.info("Count of register events: {}", registerEventsDF.count());
 
-		Dataset<Row> uniqueUsersDF = registerEventsDF.groupBy("userId").count();
-		uniqueUsersDF = uniqueUsersDF.withColumnRenamed("userId", "userId2");
+			Dataset<Row> uniqueUsersDF = registerEventsDF.groupBy("userId").count();
+			uniqueUsersDF = uniqueUsersDF.withColumnRenamed("userId", "userId2");
 
-		logger.info("Count of unique users:", uniqueUsersDF.count());
-		Dataset<Row> uniqueUsersRegisteredDF = registerEventsDF.join(uniqueUsersDF,
-				registerEventsDF.col("userId").equalTo(uniqueUsersDF.col("userId2")));
+			logger.info("Count of unique users:", uniqueUsersDF.count());
+			Dataset<Row> uniqueUsersRegisteredDF = registerEventsDF.join(uniqueUsersDF,
+					registerEventsDF.col("userId").equalTo(uniqueUsersDF.col("userId2")));
 
-		uniqueUsersRegisteredDF = uniqueUsersRegisteredDF.select(uniqueUsersRegisteredDF.col("userId"),
-				uniqueUsersRegisteredDF.col("createdAt"));
-		uniqueUsersRegisteredDF.show();
+			uniqueUsersRegisteredDF = uniqueUsersRegisteredDF.select(uniqueUsersRegisteredDF.col("userId"),
+					uniqueUsersRegisteredDF.col("createdAt"));
+			uniqueUsersRegisteredDF.show();
 
-		List<String> categories = selectUniqueEventCategories(eventsDF);
-		Dataset<Row> eventsCountDF = countUniqueEvents(eventsDF, uniqueUsersDF, categories);
+			List<String> categories = selectUniqueEventCategories(eventsDF);
+			Dataset<Row> eventsCountDF = countUniqueEvents(eventsDF, uniqueUsersDF, categories);
 
-		Dataset<Row> diffBetweenLastAndFirstEventDF = calculateDiffBetweenFirstAndLastEvent(eventsDF);
-		Dataset<Row> usersDataDF = setupTrainingDF(eventsCountDF, diffBetweenLastAndFirstEventDF);
-		String[] cols = usersDataDF.drop("label").columns();
+			Dataset<Row> diffBetweenLastAndFirstEventDF = calculateDiffBetweenFirstAndLastEvent(eventsDF);
+			Dataset<Row> usersDataDF = setupTrainingDF(eventsCountDF, diffBetweenLastAndFirstEventDF);
+			String[] cols = usersDataDF.drop("label").columns();
 
-		/*
-		 * Step 2: Model training
-		 */
+			VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
+			Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("label",
+					"features");
 
-		logger.info("Users Data DF:");
-		usersDataDF.show();
-		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
-		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("label", "features");
-		
-		logger.info("Users Data as vector DF:");
-		usersDataAssembledAsVector.show();
+			StringIndexerModel labelIndexer = setupLabelIndexer(usersDataAssembledAsVector);
+			VectorIndexerModel featureIndexer = setupFeaturesIndexer(usersDataAssembledAsVector);
+			Dataset<Row>[] splits = usersDataAssembledAsVector.randomSplit(new double[] { 0.7, 0.3 });
+			Dataset<Row> trainingData = splits[0];
+			Dataset<Row> testData = splits[1];
 
-		
-		StringIndexerModel labelIndexer = setupLabelIndexer(usersDataAssembledAsVector);
-		VectorIndexerModel featureIndexer = setupFeaturesIndexer(usersDataAssembledAsVector);
-		Dataset<Row>[] splits = usersDataAssembledAsVector.randomSplit(new double[] { 0.7, 0.3 });
-		Dataset<Row> trainingData = splits[0];
-		Dataset<Row> testData = splits[1];
+			PipelineModel model = trainModel(labelIndexer, featureIndexer, trainingData);
+			Dataset<Row> predictions = model.transform(testData);
+			predictions.select("predictedLabel", "label", "features").show(5);
 
-		PipelineModel model = trainModel(labelIndexer, featureIndexer, trainingData);
-		Dataset<Row> predictions = model.transform(testData);
-		predictions.select("predictedLabel", "label", "features").show(5);
+			saveModel(model);
+			saveCategories(categories);
 
-		saveModel(model);
-		saveCategories(categories);
-
-		this.setStatus(SparkProcessStatus.FINISHED);
-		logger.info("Finished processing!");
+			this.setStatus(SparkProcessStatus.FINISHED);
+			getSparkService().onSparkProcessCompleted(this);
+			logger.info("Finished processing!");
+		} catch (Exception exc) {
+			logger.error("Exception in process method: {}", ExceptionUtils.getFullStackTrace(exc));
+			this.setStatus(SparkProcessStatus.FINISHED);
+			this.error = exc.getMessage();
+			getSparkService().onSparkProcessCompleted(this);
+		}
 	}
 
 	private void saveCategories(List<String> categories) {
 		try {
-			String filePath = "/Users/user/Documents/models/churn/" + request.getApplicationId() + "/categories.json";
+			String filePath = getSparkService().getConfig().getSparkModelsDir() + request.getApplicationId()
+					+ "/categories.json";
 			String content = getSparkService().getGson().toJson(categories);
 			Files.write(Paths.get(filePath), content.getBytes());
 			logger.info("Saved categories to files");
 		} catch (Exception exc) {
-			exc.printStackTrace();
+			this.error = exc.getMessage();
+			logger.error("Exception in saveCategories. Parameter: {}, exc: {}", categories,
+					ExceptionUtils.getFullStackTrace(exc));
 		}
 	}
 
 	private void saveModel(PipelineModel model) {
 		try {
 			logger.info("Saving model");
-			String rootPath = "/Users/user/Documents/models/churn/" + request.getApplicationId();
+			String rootPath = getSparkService().getConfig().getSparkModelsDir() + request.getApplicationId();
 			File dir = new File(rootPath);
 			if (dir.exists()) {
 				deleteDirectoryStream(Paths.get(rootPath));
 				dir.delete();
 			}
 			model.save(rootPath);
+			this.result = rootPath;
 			logger.info("Model saved");
 		} catch (Exception exc) {
-			exc.printStackTrace();
+			this.error = exc.getMessage();
+			logger.error("Exception in saveModel. Parameter: {}, exc: {}", model,
+					ExceptionUtils.getFullStackTrace(exc));
 		}
 	}
 
@@ -144,6 +145,7 @@ public class ChurnModelBuildProcess extends SparkProcess {
 		try {
 			Files.walk(path).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
 		} catch (Exception exc) {
+			this.error = exc.getMessage();
 			exc.printStackTrace();
 		}
 	}
@@ -221,7 +223,7 @@ public class ChurnModelBuildProcess extends SparkProcess {
 	private List<String> selectUniqueEventCategories(Dataset<Row> eventsDF) {
 		Dataset<Row> uniqueEventCategories = eventsDF.groupBy("category").count().select("category");
 		List<Row> categoriesAsRowsList = uniqueEventCategories.collectAsList();
-		List<String> categories = new ArrayList<String>();
+		List<String> categories = new ArrayList<>();
 		for (Row categoryRow : categoriesAsRowsList) {
 			categories.add(categoryRow.mkString());
 		}
@@ -230,9 +232,9 @@ public class ChurnModelBuildProcess extends SparkProcess {
 
 	public List<UserEvent> loadUserEvents(long count) {
 		List<UserEvent> userEvents = new ArrayList<>();
-		int selectIterations = (int) Math.ceil(count / (double) PAGE_SIZE);
+		int selectIterations = (int) Math.ceil(count / (double) pageSize);
 		for (int iteration = 0; iteration <= selectIterations; iteration++) {
-			userEvents.addAll(selectUserEvents(selectIterations, PAGE_SIZE));
+			userEvents.addAll(selectUserEvents(selectIterations, pageSize));
 		}
 		return userEvents;
 	}

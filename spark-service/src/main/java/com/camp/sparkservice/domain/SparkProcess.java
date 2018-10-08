@@ -18,6 +18,8 @@ public abstract class SparkProcess implements Serializable {
 	protected SparkProcessStatus status;
 	protected Date startedAt;
 	protected int step;
+	protected String error;
+	protected String result;
 
 	public SparkProcess(SparkService sparkService) {
 		this.sparkService = sparkService;
@@ -48,7 +50,15 @@ public abstract class SparkProcess implements Serializable {
 	public int getStep() {
 		return step;
 	}
-	
+		
+	public String getError() {
+		return error;
+	}
+
+	public String getResult() {
+		return result;
+	}
+
 	public SparkSession sparkSession() {
 		return sparkService.getSparkSession();
 	}

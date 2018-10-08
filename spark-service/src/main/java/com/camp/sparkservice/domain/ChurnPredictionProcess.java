@@ -1,35 +1,32 @@
 package com.camp.sparkservice.domain;
 
-import static org.apache.spark.sql.functions.when;
-
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.ml.PipelineModel;
 import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import com.camp.sparkservice.service.SparkService;
 import com.google.common.reflect.TypeToken;
 
-import org.apache.spark.sql.functions;
-import scala.collection.immutable.Set;
-import scala.collection.mutable.Buffer;
-
 public class ChurnPredictionProcess extends SparkProcess {
-	private final int PAGE_SIZE = 100;
+	private static final int pageSize = 100;
 	private static final long serialVersionUID = -2114214764831644182L;
 	private Logger logger = LoggerFactory.getLogger(ChurnModelBuildProcess.class);
 
 	private ChurnPredictRequest request;
+	private Dataset<Row> predictions;
 
 	public ChurnPredictionProcess(SparkService sparkService, ChurnPredictRequest request) {
 		super(sparkService);
@@ -38,56 +35,59 @@ public class ChurnPredictionProcess extends SparkProcess {
 
 	@Override
 	public void execute() {
-		this.setStatus(SparkProcessStatus.PROCESSING);
-		logger.info("Started churn mogel build process");
+		try {
+			this.setStatus(SparkProcessStatus.PROCESSING);
+			logger.info("Started churn mogel build process");
 
-		/*
-		 * Step 1: Model data setup
-		 */
-		long eventCount = countEvents();
-		logger.info("Count of events, found for build process: {}", eventCount);
-		List<UserEvent> events = loadUserEvents(eventCount);
+			long eventCount = countEvents();
+			logger.info("Count of events, found for predict process: {}", eventCount);
+			List<UserEvent> events = loadUserEvents(eventCount);
 
-		logger.info("Count of events downloaded from database for build process: {}", events.size());
-		JavaRDD<UserEvent> eventsRDD = getSparkService().getSparkContext().parallelize(events);
-		Dataset<Row> eventsDF = sparkSession().createDataFrame(eventsRDD, UserEvent.class);
+			logger.info("Count of events downloaded from database for build process: {}", events.size());
+			JavaRDD<UserEvent> eventsRDD = getSparkService().getSparkContext().parallelize(events);
+			Dataset<Row> eventsDF = sparkSession().createDataFrame(eventsRDD, UserEvent.class);
 
-		logger.info("Events:");
-		eventsDF.show();
-		
-		List<String> categories = selectModelCategories();
-		Dataset<Row> eventsCountDF = countUniqueEvents(eventsDF, categories);
+			List<String> categories = selectModelCategories();
+			Dataset<Row> eventsCountDF = countUniqueEvents(eventsDF, categories);
+			Dataset<Row> diffBetweenLastAndFirstEventDF = calculateDiffBetweenFirstAndLastEvent(eventsDF);
+			Dataset<Row> usersDataDF = setupTrainingDF(eventsCountDF, diffBetweenLastAndFirstEventDF);
 
-		eventsCountDF.show();
-		
-		Dataset<Row> diffBetweenLastAndFirstEventDF = calculateDiffBetweenFirstAndLastEvent(eventsDF);
-		Dataset<Row> usersDataDF = setupTrainingDF(eventsCountDF, diffBetweenLastAndFirstEventDF);
-		logger.info(" Users DF: ");
-		usersDataDF.show();
-		String[] cols = usersDataDF.drop("label").columns();
-		VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
-		Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("features");
-		usersDataAssembledAsVector.show();
-		
-		
-		PipelineModel model = PipelineModel.load("/Users/user/Documents/models/churn/" + request.getApplicationId());
-		Dataset<Row> predictions = model.transform(usersDataAssembledAsVector);
-		
-		logger.info("Predictions:");
-		predictions.show();
-		this.setStatus(SparkProcessStatus.FINISHED);
-		logger.info("Finished processing!");
+			String[] cols = usersDataDF.drop("label").columns();
+			VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(cols).setOutputCol("features");
+			Dataset<Row> usersDataAssembledAsVector = vectorAssembler.transform(usersDataDF).select("features");
+			usersDataAssembledAsVector.show();
+
+			PipelineModel model = PipelineModel
+					.load(getSparkService().getConfig().getSparkModelsDir() + request.getApplicationId());
+			predictions = model.transform(usersDataAssembledAsVector);
+
+			logger.info("Predictions:");
+			predictions.show();
+
+			this.result = predictions.select("predictedLabel").map(row -> row.mkString(), Encoders.STRING())
+					.collectAsList().toString();
+			this.setStatus(SparkProcessStatus.FINISHED);
+			logger.info("Finished processing!");
+			getSparkService().onSparkProcessCompleted(this);
+		} catch (Exception exc) {
+			logger.error("Exception in process method: {}", ExceptionUtils.getFullStackTrace(exc));
+			this.setStatus(SparkProcessStatus.FINISHED);
+			this.error = exc.getMessage();
+			getSparkService().onSparkProcessCompleted(this);
+		}
 	}
-
 
 	private List<String> selectModelCategories() {
 		try {
-			String categoriesJson = new String(Files.readAllBytes(
-					Paths.get("/Users/user/Documents/models/churn/" + request.getApplicationId() + "/categories.json")));
-			return getSparkService().getGson().fromJson(categoriesJson, new TypeToken<ArrayList<String>>(){}.getType());
-			
+			String categoriesJson = new String(
+					Files.readAllBytes(Paths.get(getSparkService().getConfig().getSparkModelsDir()
+							+ request.getApplicationId() + "/categories.json")));
+			return getSparkService().getGson().fromJson(categoriesJson, new TypeToken<ArrayList<String>>() {
+				private static final long serialVersionUID = 1L;
+			}.getType());
+
 		} catch (Exception exc) {
-			exc.printStackTrace();
+			error = exc.getMessage();
 			return Collections.emptyList();
 		}
 	}
@@ -115,11 +115,10 @@ public class ChurnPredictionProcess extends SparkProcess {
 	}
 
 	private Dataset<Row> countUniqueEvents(Dataset<Row> eventsDF, List<String> categories) {
-		logger.info("Categories: {}",categories);
+		logger.info("Categories: {}", categories);
 		Dataset<Row> eventsCountDF = eventsDF.groupBy("userId").count().withColumnRenamed("userId", "userId2");
 		Dataset<Row> mockDF = eventsCountDF.select("userId2");
-		
-		eventsCountDF.show();
+
 		for (String category : categories) {
 			logger.info("Processing category: {}", category);
 			Dataset<Row> categoryDF = eventsDF.select("userId", "category");
@@ -131,14 +130,9 @@ public class ChurnPredictionProcess extends SparkProcess {
 				mockCategoryDF = mockCategoryDF.withColumn(category.toLowerCase() + "_event_count", functions.lit(0));
 				categoryDF = mockCategoryDF;
 			}
-			logger.info("CategoryDF:");
-			categoryDF.show();
-			
 			eventsCountDF = eventsCountDF.join(categoryDF,
 					eventsCountDF.col("userId2").equalTo(categoryDF.col("userId_" + category)));
-			logger.info("After join: ");
-			eventsCountDF.show();
-			
+
 		}
 		eventsCountDF = eventsCountDF.withColumnRenamed("userId2", "userId");
 		eventsCountDF = eventsCountDF.drop("count");
@@ -150,9 +144,9 @@ public class ChurnPredictionProcess extends SparkProcess {
 
 	public List<UserEvent> loadUserEvents(long count) {
 		List<UserEvent> userEvents = new ArrayList<>();
-		int selectIterations = (int) Math.ceil(count / (double) PAGE_SIZE);
+		int selectIterations = (int) Math.ceil(count / (double) pageSize);
 		for (int iteration = 0; iteration <= selectIterations; iteration++) {
-			userEvents.addAll(selectUserEvents(selectIterations, PAGE_SIZE));
+			userEvents.addAll(selectUserEvents(selectIterations, pageSize));
 		}
 		return userEvents;
 	}
