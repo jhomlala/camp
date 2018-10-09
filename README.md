@@ -12,14 +12,17 @@ Modules:
 * spark-service - handles big data processing/machine learning operations
 * config - stores config for each services
 * registry - provides discovery server for services
+* turbine-service - provides application for turbine application (hystrix metrics)
+* monitoring - provides application for hystrix metrics monitoring
 
 Technologies:
 * Spring Boot
 * Spring Cloud Config
-* Spring Eureka
-* Spring OpenFeign
-* Spring Hystrix
-* Spring Turbine
+* Spring Cloud Eureka
+* Spring Cloud OpenFeign
+* Spring Cloud Hystrix
+* Spring Cloud Turbine
+* Spring Cloud Stream
 * Sprng Data Cassandra
 * Apache Spark
 * Apache Kafka
