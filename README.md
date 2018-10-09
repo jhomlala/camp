@@ -18,7 +18,10 @@ Technologies:
 * Spring Cloud Config
 * Spring Eureka
 * Spring OpenFeign
+* Spring Hystrix
+* Spring Turbine
 * Sprng Data Cassandra
 * Apache Spark
+* Apache Kafka
 * Cassandra
 
