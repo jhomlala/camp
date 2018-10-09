@@ -4,9 +4,8 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 
-import javax.validation.Valid;
-
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.camp.notificationsservice.domain.Notification;
@@ -15,14 +14,23 @@ import com.camp.notificationsservice.domain.NotificationStatus;
 import com.camp.notificationsservice.exception.InvalidNotificationIdException;
 import com.camp.notificationsservice.exception.NotificationNotExistsException;
 import com.camp.notificationsservice.repository.NotificationRepository;
+import com.google.gson.Gson;
 
 @Service
 public class NotificationService {
 
+	private final String topic = "notification_topic";
+	
+	@Autowired
+	private KafkaTemplate<String, Notification> kafkaNotificationTemplate;
+	
 	@Autowired
 	private NotificationRepository notificationRepository;
 	
-	public Notification createNotification(@Valid NotificationCreateRequest notificationCreateRequest) {
+	@Autowired
+	private Gson gson;
+	
+	public Notification createNotification(NotificationCreateRequest notificationCreateRequest) {
 		Notification notification = new Notification();
 		notification.setId(generateValidUUID());
 		notification.setApplicationId(notificationCreateRequest.getApplicationId());
@@ -32,7 +40,14 @@ public class NotificationService {
 		notification.setAudience("ALL");
 		notification.setCreatedAt(new Date());
 		notification.setUpdatedAt(new Date());
-		return notificationRepository.save(notification);
+		notification = notificationRepository.save(notification);
+		return notification;
+	}
+	
+	public Notification processCreateNotification(NotificationCreateRequest notificationCreateRequest) {
+		Notification notification = createNotification(notificationCreateRequest);
+		kafkaNotificationTemplate.send(topic, notification);
+		return notification;
 	}
 	
 	public Optional<Notification> findByIdWithOptional(String id){
@@ -62,7 +77,9 @@ public class NotificationService {
 	
 
 	public Notification findFirstPendingNotification() {
-		return notificationRepository.findFirstByStatusOrderByCreatedAdDesc();
+		return notificationRepository.findFirstByStatusOrderByCreatedAtDesc();
 	}
+
+	
 
 }
